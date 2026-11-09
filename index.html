@@ -32,6 +32,7 @@ button:disabled{opacity:.35;cursor:not-allowed}
 .st div{background:#0a1640;border:1px solid #1c2f78;border-radius:10px;padding:10px}.st b{display:block;font-size:24px}.st span{color:var(--dim);font-size:13px}
 .big{font-size:36px;color:#ffd166;letter-spacing:6px;margin:4px 0}
 .on{border-color:var(--acc);color:var(--acc)}
+#kb{position:absolute;left:0;bottom:0;width:1px;height:1px;opacity:0;border:0;padding:0;font-size:16px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -48,6 +49,7 @@ button:disabled{opacity:.35;cursor:not-allowed}
   </div>
   <canvas id="c"></canvas>
   <div id="ov"></div>
+  <input id="kb" type="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Saisie clavier">
 </div>
 <script>
 const $=s=>document.querySelector(s), cv=$('#c'), ctx=cv.getContext('2d'), ov=$('#ov');
@@ -63,7 +65,11 @@ const WL={
  en:{a:'sun sky map key run cat dog tree fire moon wind rain star road book'.split(' '),
      b:'table river green light night world plant cloud stone water happy music'.split(' '),
      c:'keyboard monitor network machine program station journey morning window'.split(' '),
-     d:'computer security internet algorithm developer automation protection cybersecurity'.split(' ')}
+     d:'computer security internet algorithm developer automation protection cybersecurity'.split(' ')},
+ ru:{a:'дом кот сон мир лес мак сыр рот нос дым гора вода луна день ночь рука стол'.split(' '),
+     b:'школа книга земля город улица дорога неделя вечер окно птица река зима'.split(' '),
+     c:'монитор телефон студент интернет команда учебник развитие проверка'.split(' '),
+     d:'университет безопасность программист клавиатура информация технология автоматизация кибербезопасность'.split(' ')}
 };
 const P=['a','aab','abb','b','bbc','bc','ccb','c','ccd','cd'];
 const LV=P.map((p,i)=>({sp:26+i*4.2,iv:2600-i*155,goal:10+i*2,pool:p}));
@@ -86,14 +92,14 @@ function menu(){
   <p>Tape les mots avant qu’ils touchent la ligne rouge. La première lettre verrouille un mot, finis-le pour le détruire. Retour arrière : relâcher la cible. Échap : pause.</p>
   <div class="grid">${b}</div>
   <div class="row"><button data-a="surv" class="main">Mode survie ∞</button>
-  <button data-a="lang" class="on">Mots : ${lang==='fr'?'Français':'English'}</button></div>
-  <p>Mots sans accents, pour tous les claviers (AZERTY, QWERTY…).</p></div>`);
+  <button data-a="lang" class="on">Mots : ${{fr:'Français',en:'English',ru:'Русский'}[lang]}</button></div>
+  <p>${lang==='ru'?'Passe ton clavier en russe (Win+Espace) pour taper en cyrillique. ':''}Mots sans accents, pour tous les claviers (AZERTY, QWERTY…). Sur téléphone, touche l’écran si le clavier se ferme.</p></div>`);
 }
 
 function start(l,m){
   lvl=l;mode=m;const L=LV[(m==='surv'?1:l)-1];
   words=[];target=null;lives=5;killed=0;chars=0;errs=0;el=0;score=0;combo=0;spawnT=0;beams=[];parts=[];shk=0;
-  goal=m==='surv'?Infinity:L.goal;running=true;paused=false;hide();rs();hud();
+  goal=m==='surv'?Infinity:L.goal;running=true;paused=false;hide();rs();hud();kb.value='';pv='';kb.focus();
 }
 const cur=()=>LV[(mode==='surv'?Math.min(10,1+Math.floor(killed/8)):lvl)-1];
 
@@ -116,9 +122,13 @@ function spawn(){
 function key(e){
   if(e.key==='Escape'){if(running){paused=!paused;paused?show(`<div class="card"><h2>Pause</h2><div class="row"><button class="main" data-a="resume">Reprendre</button><button data-a="menu">Menu</button></div></div>`):hide()}return}
   if(!running||paused)return;
-  if(e.key==='Backspace'){e.preventDefault();if(target){if(target.n>0)target.n--;if(target.n===0)target=null}return}
+  if(e.key==='Backspace'){e.preventDefault();back();return}
   if(e.ctrlKey||e.metaKey||e.altKey||e.key.length!==1||!/\p{L}/u.test(e.key))return;
-  const c=e.key.toLowerCase();
+  e.preventDefault();typeC(e.key.toLowerCase());
+}
+function back(){if(target){if(target.n>0)target.n--;if(target.n===0)target=null}}
+function typeC(c){
+  if(!running||paused)return;
   if(!target){
     const m=words.filter(w=>w.t[0]===c).sort((a,b)=>b.y-a.y)[0];
     if(m){target=m;m.n=1;chars++}else miss();
@@ -128,6 +138,16 @@ function key(e){
   }else miss();
 }
 addEventListener('keydown',key);
+const kb=$('#kb');let pv='';
+kb.addEventListener('input',()=>{
+  const v=kb.value.toLowerCase();
+  if(v.length<pv.length)back();
+  else for(const c of v.slice(pv.length))if(/\p{L}/u.test(c))typeC(c);
+  pv=v;
+  if(v.length>30){kb.value='';pv=''}
+});
+cv.addEventListener('pointerdown',()=>{if(running&&!paused)kb.focus()});
+if(window.visualViewport)visualViewport.addEventListener('resize',()=>{$('#app').style.height=visualViewport.height+'px';rs()});
 function miss(){errs++;combo=0;shk=Math.max(shk,4)}
 function kill(w){
   combo++;score+=w.t.length*10*(1+Math.floor(combo/5));killed++;
@@ -183,8 +203,8 @@ ov.addEventListener('click',e=>{
     else if(a==='next')start(lvl+1,'lvl');
     else if(a==='menu')menu();
     else if(a==='resume'){paused=false;hide()}
-    else if(a==='lang'){lang=lang==='fr'?'en':'fr';sv('lf_l',lang);menu()}}
-  b.blur();
+    else if(a==='lang'){lang={fr:'en',en:'ru',ru:'fr'}[lang];sv('lf_l',lang);menu()}}
+  b.blur();if(running&&!paused)kb.focus();
 });
 addEventListener('blur',()=>{if(running&&!paused){paused=true;show(`<div class="card"><h2>Pause</h2><div class="row"><button class="main" data-a="resume">Reprendre</button><button data-a="menu">Menu</button></div></div>`)}});
 
